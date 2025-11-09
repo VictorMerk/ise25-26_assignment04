@@ -81,23 +81,102 @@ public class PosServiceImpl implements PosService {
 
     /**
      * Converts an OSM node to a POS domain object.
-     * Note: This is a stub implementation and should be replaced with real mapping logic.
+     * Maps OSM tags and attributes to POS fields, validates required fields,
+     * and maps amenity to PosType and postal code to CampusType.
      */
     private @NonNull Pos convertOsmNodeToPos(@NonNull OsmNode osmNode) {
-        if (osmNode.nodeId().equals(5589879349L)) {
-            return Pos.builder()
-                    .name("Rada Coffee & Rösterei")
-                    .description("Caffé und Rösterei")
-                    .type(PosType.CAFE)
-                    .campus(CampusType.ALTSTADT)
-                    .street("Untere Straße")
-                    .houseNumber("21")
-                    .postalCode(69117)
-                    .city("Heidelberg")
-                    .build();
-        } else {
+        // Validate required fields
+        validateRequiredFields(osmNode);
+        
+        // Map amenity to PosType
+        PosType posType = mapAmenityToPosType(osmNode.amenity());
+        
+        // Map postal code to CampusType
+        CampusType campusType = mapPostalCodeToCampusType(osmNode.postalCode());
+        
+        // Build POS object
+        return Pos.builder()
+                .name(osmNode.name())
+                .description(osmNode.description() != null ? osmNode.description() : "")
+                .type(posType)
+                .campus(campusType)
+                .street(osmNode.street())
+                .houseNumber(osmNode.houseNumber())
+                .postalCode(osmNode.postalCode())
+                .city(osmNode.city())
+                .build();
+    }
+
+    /**
+     * Validates that all required fields are present in the OSM node.
+     * Throws OsmNodeMissingFieldsException if any required field is missing.
+     */
+    private void validateRequiredFields(@NonNull OsmNode osmNode) {
+        if (osmNode.name() == null || osmNode.name().isEmpty()) {
             throw new OsmNodeMissingFieldsException(osmNode.nodeId());
         }
+        if (osmNode.amenity() == null || osmNode.amenity().isEmpty()) {
+            throw new OsmNodeMissingFieldsException(osmNode.nodeId());
+        }
+        if (osmNode.street() == null || osmNode.street().isEmpty()) {
+            throw new OsmNodeMissingFieldsException(osmNode.nodeId());
+        }
+        if (osmNode.houseNumber() == null || osmNode.houseNumber().isEmpty()) {
+            throw new OsmNodeMissingFieldsException(osmNode.nodeId());
+        }
+        if (osmNode.postalCode() == null) {
+            throw new OsmNodeMissingFieldsException(osmNode.nodeId());
+        }
+        if (osmNode.city() == null || osmNode.city().isEmpty()) {
+            throw new OsmNodeMissingFieldsException(osmNode.nodeId());
+        }
+    }
+
+    /**
+     * Maps OSM amenity tag to PosType enum.
+     * 
+     * @param amenity the amenity value from OSM (e.g., "cafe", "bakery")
+     * @return the corresponding PosType
+     * @throws OsmNodeMissingFieldsException if amenity is null or cannot be mapped
+     */
+    private @NonNull PosType mapAmenityToPosType(@NonNull String amenity) {
+        if (amenity == null || amenity.isEmpty()) {
+            throw new IllegalArgumentException("Amenity cannot be null or empty");
+        }
+        
+        return switch (amenity.toLowerCase()) {
+            case "cafe" -> PosType.CAFE;
+            case "vending_machine" -> PosType.VENDING_MACHINE;
+            case "bakery" -> PosType.BAKERY;
+            case "cafeteria" -> PosType.CAFETERIA;
+            default -> {
+                log.warn("Unknown amenity type '{}', defaulting to CAFE", amenity);
+                yield PosType.CAFE;
+            }
+        };
+    }
+
+    /**
+     * Maps postal code to CampusType enum.
+     * 
+     * @param postalCode the postal code from OSM
+     * @return the corresponding CampusType
+     * @throws OsmNodeMissingFieldsException if postal code is null or cannot be mapped
+     */
+    private @NonNull CampusType mapPostalCodeToCampusType(@NonNull Integer postalCode) {
+        if (postalCode == null) {
+            throw new IllegalArgumentException("Postal code cannot be null");
+        }
+        
+        return switch (postalCode) {
+            case 69117 -> CampusType.ALTSTADT;
+            case 69115 -> CampusType.BERGHEIM;
+            case 69120 -> CampusType.INF;
+            default -> {
+                log.warn("Unknown postal code '{}', defaulting to ALTSTADT", postalCode);
+                yield CampusType.ALTSTADT;
+            }
+        };
     }
 
     /**
